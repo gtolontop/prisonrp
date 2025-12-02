@@ -1,9 +1,9 @@
 # Ignore les fichiers de cache
-txData/thelastcolony.base/cache/
+txData/prisonrp.base/cache/
 
 # Ignore server data (runtime changes, player data, stats)
 txData/default/data/
-txData/thelastcolony.base/.replxx_history
+txData/prisonrp.base/.replxx_history
 
 # Ignore les logs
 *.log
