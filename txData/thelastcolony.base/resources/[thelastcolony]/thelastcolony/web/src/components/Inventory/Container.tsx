@@ -1,7 +1,8 @@
 /**
  * Container Component
- * Reusable component for displaying loot containers
- * Used in LootView (right side), VehicleView, StorageView
+ * Reusable component for displaying secondary containers
+ * Types: loot_box, corpse, storage, vehicle, glovebox, trunk, etc.
+ * Used in InventoryView (right side panel)
  */
 
 import React from 'react';
@@ -26,6 +27,26 @@ interface ContainerProps {
   cellSize?: number; // Cell size in px (default 55)
 }
 
+// Get icon based on container type
+const getContainerIcon = (type: string): string => {
+  switch (type) {
+    case 'vehicle':
+    case 'trunk':
+      return '🚗';
+    case 'glovebox':
+      return '📦';
+    case 'corpse':
+      return '💀';
+    case 'storage':
+    case 'stash':
+      return '🗄️';
+    case 'loot_box':
+    case 'container':
+    default:
+      return '📦';
+  }
+};
+
 export const Container: React.FC<ContainerProps> = ({
   container,
   itemDefinitions,
@@ -39,11 +60,15 @@ export const Container: React.FC<ContainerProps> = ({
   title,
   cellSize = 55,
 }) => {
+  const icon = getContainerIcon(container.type);
+
   return (
     <div className="flex flex-col gap-3">
       {/* Header */}
       <div className="text-center">
-        <h2 className="text-xl font-bold text-white">{title || container.label}</h2>
+        <h2 className="text-xl font-bold text-white">
+          {icon} {title || container.label}
+        </h2>
         <p className="text-xs text-gray-400">
           {container.grid.width}×{container.grid.height} Storage
         </p>

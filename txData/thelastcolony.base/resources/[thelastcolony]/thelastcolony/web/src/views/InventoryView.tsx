@@ -6,9 +6,11 @@
 
 import React from 'react';
 import { PlayerInventory } from '@/components/Inventory/PlayerInventory';
+import { Container } from '@/components/Inventory/Container';
 import { ContextMenu } from '@/components/Inventory/ContextMenu';
 import { ItemTooltip } from '@/components/Inventory/ItemTooltip';
 import { useInventoryStore } from '@/stores/inventoryStore';
+import { useLootStore } from '@/stores/lootStore';
 import { useKeyboard, useContextMenu, useTooltip, useDragAndDrop } from '@/hooks';
 import { closeUI, sendNUIEvent } from '@/utils/nui';
 import { findCompatibleItems, findCompatibleEquipmentSlots } from '@/utils/inventory';
@@ -16,6 +18,7 @@ import type { InventoryItem } from '@/types';
 
 const InventoryView: React.FC = () => {
   const { inventory, itemDefinitions, devMoveItem } = useInventoryStore();
+  const { container } = useLootStore();
   const { draggedItem, mousePosition, startDrag, endDrag, rotateDraggedItem, lockOperation, unlockOperation } = useDragAndDrop();
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
   const { tooltip, showTooltip, hideTooltip } = useTooltip();
@@ -221,6 +224,23 @@ const InventoryView: React.FC = () => {
           showWeight={true}
           compact={false}
         />
+
+        {/* SECONDARY CONTAINER (Loot, Glovebox, Trunk, Stash, etc.) */}
+        {container && (
+          <div className="w-[500px] flex-shrink-0">
+            <Container
+              container={container}
+              itemDefinitions={itemDefinitions}
+              draggedItem={draggedItem}
+              mousePosition={mousePosition}
+              onDragStart={startDrag}
+              onDrop={safeMoveItem}
+              onContextMenu={openContextMenu}
+              onItemHover={showTooltip}
+              onItemLeave={hideTooltip}
+            />
+          </div>
+        )}
 
 
         {/* Dragged item preview */}
