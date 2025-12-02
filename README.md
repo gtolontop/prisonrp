@@ -1,2 +1,1 @@
-# prisonrp
-prisonrp
+# thelastcolony-server

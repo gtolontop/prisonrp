@@ -1,0 +1,31 @@
+# Ignore les fichiers de cache
+txData/thelastcolony.base/cache/
+
+# Ignore server data (runtime changes, player data, stats)
+txData/default/data/
+txData/thelastcolony.base/.replxx_history
+
+# Ignore les logs
+*.log
+
+# Node modules (partout)
+node_modules/
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/build/
+
+# On track toutes les ressources, juste ignorer node_modules
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temp files
+*.tmp
+*.bak

@@ -1,0 +1,30 @@
+--[[ FX Information ]]--
+fx_version   'cerulean'
+use_experimental_fxv2_oal 'yes'
+lua54        'yes'
+game         'gta5'
+
+--[[ Resource Information ]]--
+name         'tlc_commands'
+version      '0.0.0'
+license      'GPL-3.0-or-later'
+author       'The Last Colony'
+repository   'https://github.com/communityox/ox_commands'
+
+--[[ Manifest ]]--
+shared_script '@ox_lib/init.lua'
+server_script 'server.lua'
+
+client_scripts {
+    'config.lua',
+    'vendor/freecam/utils.lua',
+    'vendor/freecam/config.lua',
+    'vendor/freecam/main.lua',
+    'vendor/freecam/camera.lua',
+	'client/main.lua',
+    'client/carmenu.lua',
+}
+
+files {
+	'locales/*.json'
+}

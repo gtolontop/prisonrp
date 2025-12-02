@@ -1,0 +1,263 @@
+--[[
+    Outline System (Client-side)
+    Reusable system for entity outlines/glow effects with distance/occlusion culling
+    Used for: dropped items, interactions, loot containers, etc.
+]]
+
+local Outline = {}
+
+-- Active outlined entities {entity = {color, shader, addedAt, visible}}
+local outlinedEntities = {}
+
+-- Load Proximity system directly (loaded before this script in fxmanifest)
+local Proximity = require 'client.modules.proximity'
+
+-- Config
+local MAX_DISTANCE = 20.0 -- Max distance to show outline (meters)
+local CHECK_FOV = false -- FOV check disabled (was causing bugs)
+
+-- ============================================
+-- OUTLINE MANAGEMENT
+-- ============================================
+
+--- Add outline to an entity
+--- @param entity number Entity handle
+--- @param color table {r, g, b, a} (default: white)
+--- @param shader number Shader variant (0=gauss, 1=2px solid, 2=fullscreen)
+--- @return boolean success
+function Outline.Add(entity, color, shader)
+    if not DoesEntityExist(entity) then
+        print('^3[Outline]^0 WARNING: Entity does not exist')
+        return false
+    end
+
+    color = color or {r = 255, g = 255, b = 255, a = 255}
+    shader = shader or 0
+
+    -- Track this entity (start invisible, let Proximity manage visibility)
+    outlinedEntities[entity] = {
+        color = color,
+        shader = shader,
+        addedAt = GetGameTimer(),
+        visible = false
+    }
+
+    -- Register with Proximity system
+    if Proximity then
+        Proximity.Register(entity, {
+            maxDistance = MAX_DISTANCE,
+            checkFOV = CHECK_FOV,
+            onNear = function(ent, dist)
+                if outlinedEntities[ent] and not outlinedEntities[ent].visible then
+                    SetEntityDrawOutline(ent, true)
+                    SetEntityDrawOutlineColor(color.r, color.g, color.b, color.a)
+                    if shader ~= 0 then
+                        SetEntityDrawOutlineShader(shader)
+                    end
+                    outlinedEntities[ent].visible = true
+                end
+            end,
+            onFar = function(ent)
+                if outlinedEntities[ent] and outlinedEntities[ent].visible then
+                    SetEntityDrawOutline(ent, false)
+                    outlinedEntities[ent].visible = false
+                end
+            end
+        })
+    end
+
+    print(string.format('^2[Outline]^0 Added outline to entity %d (color: %d,%d,%d,%d, FOV culling: %s)',
+        entity, color.r, color.g, color.b, color.a, CHECK_FOV))
+
+    return true
+end
+
+--- Remove outline from an entity
+--- @param entity number Entity handle
+--- @return boolean success
+function Outline.Remove(entity)
+    -- Unregister from Proximity system
+    if Proximity then
+        Proximity.Unregister(entity)
+    end
+
+    if DoesEntityExist(entity) then
+        SetEntityDrawOutline(entity, false)
+    end
+
+    outlinedEntities[entity] = nil
+
+    print(string.format('^2[Outline]^0 Removed outline from entity %d', entity))
+    return true
+end
+
+--- Update outline color
+--- @param entity number Entity handle
+--- @param color table {r, g, b, a}
+--- @return boolean success
+function Outline.UpdateColor(entity, color)
+    if not outlinedEntities[entity] then
+        return Outline.Add(entity, color)
+    end
+
+    outlinedEntities[entity].color = color
+
+    -- Update immediately if currently visible
+    if outlinedEntities[entity].visible then
+        SetEntityDrawOutlineColor(color.r, color.g, color.b, color.a)
+    end
+
+    return true
+end
+
+--- Check if entity has outline
+--- @param entity number Entity handle
+--- @return boolean
+function Outline.Has(entity)
+    return outlinedEntities[entity] ~= nil
+end
+
+--- Remove all outlines (cleanup)
+function Outline.RemoveAll()
+    local count = 0
+    for entity, _ in pairs(outlinedEntities) do
+        if DoesEntityExist(entity) then
+            SetEntityDrawOutline(entity, false)
+        end
+        count = count + 1
+    end
+
+    outlinedEntities = {}
+    print(string.format('^2[Outline]^0 Removed %d outlines', count))
+end
+
+-- ============================================
+-- PRESET COLORS
+-- ============================================
+
+Outline.Colors = {
+    White = {r = 255, g = 255, b = 255, a = 255},
+    Green = {r = 34, g = 197, b = 94, a = 255},
+    Red = {r = 239, g = 68, b = 68, a = 255},
+    Yellow = {r = 234, g = 179, b = 8, a = 255},
+    Blue = {r = 59, g = 130, b = 246, a = 255},
+    Purple = {r = 168, g = 85, b = 247, a = 255},
+    Orange = {r = 249, g = 115, b = 22, a = 255}
+}
+
+-- ============================================
+-- VISIBILITY MANAGEMENT WITH RAYCAST
+-- ============================================
+
+--- Check if entity is visible using multi-point raycast
+local function IsEntityVisible(entity)
+    if not DoesEntityExist(entity) then
+        return false
+    end
+
+    local playerPed = PlayerPedId()
+    local camCoords = GetGameplayCamCoord()
+    local entityCoords = GetEntityCoords(entity)
+
+    -- Get bounding box for multi-point testing
+    local min, max = GetModelDimensions(GetEntityModel(entity))
+
+    -- Test 13 points: center + 8 corners + 4 mid-edges
+    local testPoints = {
+        entityCoords, -- Center
+        -- 8 corners
+        GetOffsetFromEntityInWorldCoords(entity, min.x, min.y, min.z),
+        GetOffsetFromEntityInWorldCoords(entity, max.x, min.y, min.z),
+        GetOffsetFromEntityInWorldCoords(entity, max.x, max.y, min.z),
+        GetOffsetFromEntityInWorldCoords(entity, min.x, max.y, min.z),
+        GetOffsetFromEntityInWorldCoords(entity, min.x, min.y, max.z),
+        GetOffsetFromEntityInWorldCoords(entity, max.x, min.y, max.z),
+        GetOffsetFromEntityInWorldCoords(entity, max.x, max.y, max.z),
+        GetOffsetFromEntityInWorldCoords(entity, min.x, max.y, max.z),
+        -- 4 mid-edges for better detection
+        GetOffsetFromEntityInWorldCoords(entity, 0, 0, min.z),
+        GetOffsetFromEntityInWorldCoords(entity, 0, 0, max.z),
+        GetOffsetFromEntityInWorldCoords(entity, min.x, 0, (min.z + max.z) / 2),
+        GetOffsetFromEntityInWorldCoords(entity, max.x, 0, (min.z + max.z) / 2),
+    }
+
+    local visiblePoints = 0
+    for _, point in ipairs(testPoints) do
+        -- Raycast WITHOUT player (check for world obstacles only)
+        local raycast = StartShapeTestRay(
+            camCoords.x, camCoords.y, camCoords.z,
+            point.x, point.y, point.z,
+            -1, -- Hit all
+            playerPed, -- Ignore player for this check
+            0
+        )
+        local _, hit, _, _, hitEntity = GetShapeTestResult(raycast)
+
+        -- Point is visible if no hit OR hit the entity itself
+        if (not hit) or (hitEntity == entity) then
+            visiblePoints = visiblePoints + 1
+        end
+    end
+
+    -- Show outline if at least 1 point is visible (even partial visibility)
+    return visiblePoints > 0
+end
+
+--- Thread: Check raycast visibility every frame
+CreateThread(function()
+    while true do
+        Wait(0) -- Check every frame for perfect sync
+
+        local camCoords = GetGameplayCamCoord()
+
+        for entity, data in pairs(outlinedEntities) do
+            if DoesEntityExist(entity) then
+                local entityCoords = GetEntityCoords(entity)
+                local distance = #(camCoords - entityCoords)
+
+                -- Within range and visible via raycast
+                if distance <= MAX_DISTANCE and IsEntityVisible(entity) then
+                    if not data.visible then
+                        SetEntityDrawOutline(entity, true)
+                        SetEntityDrawOutlineColor(data.color.r, data.color.g, data.color.b, data.color.a)
+                        if data.shader ~= 0 then
+                            SetEntityDrawOutlineShader(data.shader)
+                        end
+                        data.visible = true
+                    end
+                else
+                    -- Out of range or blocked by obstacle
+                    if data.visible then
+                        SetEntityDrawOutline(entity, false)
+                        data.visible = false
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================
+-- CLEANUP ON RESOURCE STOP
+-- ============================================
+
+AddEventHandler('onResourceStop', function(resourceName)
+    if resourceName ~= GetCurrentResourceName() then return end
+
+    print('^2[Outline]^0 Cleaning up all outlines...')
+    Outline.RemoveAll()
+end)
+
+-- ============================================
+-- EXPORTS
+-- ============================================
+
+exports('AddOutline', Outline.Add)
+exports('RemoveOutline', Outline.Remove)
+exports('UpdateOutlineColor', Outline.UpdateColor)
+exports('HasOutline', Outline.Has)
+exports('RemoveAllOutlines', Outline.RemoveAll)
+
+print('^2[Outline]^0 System loaded with centralized Proximity + FOV culling')
+
+return Outline
